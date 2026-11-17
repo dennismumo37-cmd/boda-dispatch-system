@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request a Boda</title>
+    <style>
+        body { font-family: sans-serif; padding: 15px; max-width: 460px; margin: auto; background: #f4f4f4; }
+        input, select, button { width: 100%; padding: 11px; margin-top: 8px; font-size: 15px; border-radius: 6px; box-sizing: border-box; }
+        button { background: #008000; color: white; border: none; font-weight: bold; cursor: pointer; }
+        .card { background: white; padding: 14px; margin-top: 12px; border-radius: 6px; border-left: 5px solid #008000; }
+        .badge { display: inline-block; padding: 3px 8px; font-size: 12px; border-radius: 4px; background: #e0f2fe; color: #0369a1; font-weight: bold; }
+        .electric { background: #dcfce7; color: #15803d; }
+        .status-box { background: #fff3cd; padding: 15px; margin-top: 15px; border-radius: 6px; border: 1px solid #ffeeba; text-align: center; }
+        .call-btn { display: inline-block; background: #222; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; margin-top: 10px; }
+    </style>
+</head>
+<body>
+    <h2>🏍️ Request a Boda</h2>
+    
+    <label>1. Your Details:</label>
+    <input type="text" id="clientName" placeholder="Your Name (e.g. Mary)" required>
+    <input type="tel" id="clientPhone" placeholder="Your Phone (e.g. 254700111222)" required>
+    <input type="text" id="destination" placeholder="Where are you going? (e.g. Gate C)" required>
+
+    <label style="display:block; margin-top:12px;">2. Nearest Stage & Preferences:</label>
+    <select id="stationSelect">
+        <option value="">-- Loading stages --</option>
+    </select>
+    <select id="filterBike">
+        <option value="ALL">All Motorcycles (Electric & Petrol)</option>
+        <option value="Electric">⚡ Electric Bikes Only</option>
+        <option value="Petrol">⛽ Petrol Bikes Only</option>
+    </select>
+    <button onclick="findRiders()">Show Available Riders</button>
+
+    <div id="statusArea"></div>
+    <div id="ridersList"></div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+        let pollInterval = null;
+
+        window.onload = async () => {
+            const res = await fetch(`${API_URL}/stations`);
+            const stations = await res.json();
+            const select = document.getElementById("stationSelect");
+            select.innerHTML = '<option value="">-- Choose Nearest Stage --</option>';
+            stations.forEach(s => {
+                select.innerHTML += `<option value="${s.id}">${s.name} (${s.landmark})</option>`;
+            });
+        };
+
+        async function findRiders() {
+            const stationId = document.getElementById("stationSelect").value;
+            const filter = document.getElementById("filterBike").value;
+            if (!stationId) return alert("Please select a stage first.");
+            
+            const res = await fetch(`${API_URL}/stations/${stationId}/riders`);
+            let riders = await res.json();
+
+            if (filter !== "ALL") {
+                riders = riders.filter(r => r.bike_type === filter);
+            }
+
+            // Sort highest rated riders first
+            riders.sort((a, b) => b.rating - a.rating);
+
+            const list = document.getElementById("ridersList");
+            list.innerHTML = "";
+
+            if (riders.length === 0) {
+                list.innerHTML = "<p>No matching riders available at this stage right now.</p>";
+                return;
+            }
+
+            riders.forEach(r => {
+                const badgeClass = r.bike_type === "Electric" ? "badge electric" : "badge";
+                list.innerHTML += `
+                    <div class="card">
+                        <strong>${r.name}</strong> ⭐ ${r.rating}/5.0 
+                        <span class="${badgeClass}">${r.bike_type}</span><br>
+                        <small>Plate: <b>${r.plate}</b> | "${r.reviews}"</small><br>
+                        <button onclick="requestSpecificRider(${r.id}, '${r.name}', '${r.phone}', '${r.plate}')">
+                            Request ${r.name}
+                        </button>
+                    </div>
+                `;
+            });
+        }
+
+        async function requestSpecificRider(riderId, riderName, riderPhone, riderPlate) {
+            const clientName = document.getElementById("clientName").value;
+            const clientPhone = document.getElementById("clientPhone").value;
+            const destination = document.getElementById("destination").value;
+            const stationId = document.getElementById("stationSelect").value;
+
+            if (!clientName || !clientPhone || !destination) {
+                return alert("Please enter your name, phone number, and destination above first.");
+            }
+
+            const res = await fetch(`${API_URL}/requests`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    client_name: clientName,
+                    client_phone: clientPhone,
+                    destination: destination,
+                    station_id: parseInt(stationId),
+                    rider_id: riderId
+                })
+            });
+
+            const data = await res.json();
+            const statusArea = document.getElementById("statusArea");
+            statusArea.innerHTML = `
+                <div class="status-box">
+                    ⏳ Request sent to <b>${riderName}</b>...<br>
+                    Waiting for rider to approve.
+                </div>
+            `;
+
+            // Check every 3 seconds if the rider approved or denied
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(async () => {
+                const checkRes = await fetch(`${API_URL}/requests/${data.request_id}`);
+                const checkData = await checkRes.json();
+
+                if (checkData.status === "APPROVED") {
+                    clearInterval(pollInterval);
+                    statusArea.innerHTML = `
+                        <div class="status-box" style="background:#dcfce7; border-color:#15803d;">
+                            ✅ <b>Ride Approved!</b><br>
+                            ${riderName} (${riderPlate}) is coming to pick you up.<br>
+                            <a class="call-btn" href="tel:+${riderPhone}">📞 Call Rider</a>
+                        </div>
+                    `;
+                } else if (checkData.status === "DENIED") {
+                    clearInterval(pollInterval);
+                    statusArea.innerHTML = `
+                        <div class="status-box" style="background:#fee2e2; border-color:#b91c1c;">
+                            ❌ <b>Ride Declined</b><br>
+                            ${riderName} is unavailable. Please choose another rider below.
+                        </div>
+                    `;
+                }
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

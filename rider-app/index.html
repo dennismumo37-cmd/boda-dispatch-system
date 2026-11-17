@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rider Dispatch Portal</title>
+    <style>
+        body { font-family: sans-serif; padding: 15px; max-width: 460px; margin: auto; background: #1e293b; color: white; }
+        select, button { width: 100%; padding: 12px; margin-top: 10px; font-size: 16px; border-radius: 6px; }
+        .req-card { background: #334155; padding: 15px; margin-top: 15px; border-radius: 8px; border-left: 5px solid #f59e0b; }
+        .btn-approve { background: #16a34a; color: white; border: none; font-weight: bold; width: 48%; cursor: pointer; }
+        .btn-deny { background: #dc2626; color: white; border: none; font-weight: bold; width: 48%; float: right; cursor: pointer; }
+        .call-link { display: inline-block; margin-top: 8px; color: #38bdf8; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h2>🛵 Rider App</h2>
+    <label>Select Your Rider Profile:</label>
+    <select id="riderSelect" onchange="startCheckingRequests()">
+        <option value="">-- Loading riders --</option>
+    </select>
+
+    <div id="requestsContainer" style="margin-top: 15px;">
+        <p style="color:#94a3b8;">Select your name above to check for incoming ride requests.</p>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000";
+        let refreshTimer = null;
+
+        window.onload = async () => {
+            const res = await fetch(`${API_URL}/riders`);
+            const riders = await res.json();
+            const select = document.getElementById("riderSelect");
+            select.innerHTML = '<option value="">-- Who are you? --</option>';
+            riders.forEach(r => {
+                select.innerHTML += `<option value="${r.id}">${r.name} (${r.plate})</option>`;
+            });
+        };
+
+        function startCheckingRequests() {
+            loadRequests();
+            if (refreshTimer) clearInterval(refreshTimer);
+            // Auto-check every 4 seconds (uses < 1KB of data)
+            refreshTimer = setInterval(loadRequests, 4000);
+        }
+
+        async function loadRequests() {
+            const riderId = document.getElementById("riderSelect").value;
+            if (!riderId) return;
+
+            const res = await fetch(`${API_URL}/riders/${riderId}/requests`);
+            const requests = await res.json();
+            const container = document.getElementById("requestsContainer");
+            container.innerHTML = "";
+
+            if (requests.length === 0) {
+                container.innerHTML = "<p>No ride requests yet. Waiting for clients...</p>";
+                return;
+            }
+
+            requests.forEach(req => {
+                let actionArea = "";
+                if (req.status === "PENDING") {
+                    actionArea = `
+                        <div style="margin-top: 10px;">
+                            <button class="btn-approve" onclick="respondToRide(${req.id}, 'APPROVED')">✅ Approve</button>
+                            <button class="btn-deny" onclick="respondToRide(${req.id}, 'DENIED')">❌ Deny</button>
+                        </div>
+                    `;
+                } else {
+                    actionArea = `<p>Status: <b>${req.status}</b></p>`;
+                }
+
+                container.innerHTML += `
+                    <div class="req-card">
+                        <strong>Client: ${req.client_name}</strong><br>
+                        Destination: <b>${req.destination}</b><br>
+                        <a class="call-link" href="tel:+${req.client_phone}">📞 ${req.client_phone}</a>
+                        ${actionArea}
+                    </div>
+                `;
+            });
+        }
+
+        async function respondToRide(requestId, decision) {
+            await fetch(`${API_URL}/requests/${requestId}/decision`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ status: decision })
+            });
+            loadRequests(); // Immediately update the screen
+        }
+    </script>
+</body>
+</html>
