@@ -3,94 +3,128 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Rider Dispatch Portal</title>
+    <title>Boda Dispatch - Rider Portal</title>
     <style>
-        body { font-family: sans-serif; padding: 15px; max-width: 460px; margin: auto; background: #1e293b; color: white; }
-        select, button { width: 100%; padding: 12px; margin-top: 10px; font-size: 16px; border-radius: 6px; }
-        .req-card { background: #334155; padding: 15px; margin-top: 15px; border-radius: 8px; border-left: 5px solid #f59e0b; }
-        .btn-approve { background: #16a34a; color: white; border: none; font-weight: bold; width: 48%; cursor: pointer; }
-        .btn-deny { background: #dc2626; color: white; border: none; font-weight: bold; width: 48%; float: right; cursor: pointer; }
-        .call-link { display: inline-block; margin-top: 8px; color: #38bdf8; text-decoration: none; font-weight: bold; }
+        body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 15px; background: #0f172a; color: #f8fafc; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        select, button { padding: 10px; border-radius: 6px; border: none; font-size: 14px; width: 100%; box-sizing: border-box; }
+        select { margin-bottom: 15px; background: #1e293b; color: white; border: 1px solid #334155; }
+        .card { background: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #38bdf8; }
+        .card p { margin: 5px 0; font-size: 14px; }
+        .btn-refresh { background: #3b82f6; color: white; cursor: pointer; width: auto; }
+        .ride-box { background: #1e293b; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #22c55e; }
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        .btn-accept { background: #22c55e; color: white; font-weight: bold; flex: 1; cursor: pointer; padding: 8px; border-radius: 4px; border: none;}
+        .btn-deny { background: #ef4444; color: white; font-weight: bold; flex: 1; cursor: pointer; padding: 8px; border-radius: 4px; border: none;}
     </style>
 </head>
 <body>
-    <h2>🛵 Rider App</h2>
-    <label>Select Your Rider Profile:</label>
-    <select id="riderSelect" onchange="startCheckingRequests()">
+    <div class="header">
+        <h2>🛵 Rider Portal</h2>
+        <button class="btn-refresh" onclick="loadData()">🔄 Refresh</button>
+    </div>
+
+    <label for="riderSelect"><strong>Select Your Rider Profile:</strong></label>
+    <select id="riderSelect" onchange="filterRides()">
         <option value="">-- Loading riders --</option>
     </select>
 
-    <div id="requestsContainer" style="margin-top: 15px;">
-        <p style="color:#94a3b8;">Select your name above to check for incoming ride requests.</p>
-    </div>
+    <div id="riderInfo" style="margin-bottom: 20px;"></div>
+
+    <h3>Incoming Ride Requests</h3>
+    <div id="ridesList">Select your profile above to check for rides.</div>
 
     <script>
+        // Change to "http://127.0.0.1:8000" if testing locally, or keep Render URL for global testing
         const API_URL = "https://boda-dispatch-system.onrender.com";
-        let refreshTimer = null;
 
-        window.onload = async () => {
-            const res = await fetch(`${API_URL}/riders`);
-            const riders = await res.json();
-            const select = document.getElementById("riderSelect");
-            select.innerHTML = '<option value="">-- Who are you? --</option>';
-            riders.forEach(r => {
-                select.innerHTML += `<option value="${r.id}">${r.name} (${r.plate})</option>`;
-            });
-        };
-
-        function startCheckingRequests() {
-            loadRequests();
-            if (refreshTimer) clearInterval(refreshTimer);
-            // Auto-check every 4 seconds (uses < 1KB of data)
-            refreshTimer = setInterval(loadRequests, 4000);
+        async function loadData() {
+            await loadRiders();
+            await loadRides();
         }
 
-        async function loadRequests() {
-            const riderId = document.getElementById("riderSelect").value;
-            if (!riderId) return;
-
-            const res = await fetch(`${API_URL}/riders/${riderId}/requests`);
-            const requests = await res.json();
-            const container = document.getElementById("requestsContainer");
-            container.innerHTML = "";
-
-            if (requests.length === 0) {
-                container.innerHTML = "<p>No ride requests yet. Waiting for clients...</p>";
-                return;
-            }
-
-            requests.forEach(req => {
-                let actionArea = "";
-                if (req.status === "PENDING") {
-                    actionArea = `
-                        <div style="margin-top: 10px;">
-                            <button class="btn-approve" onclick="respondToRide(${req.id}, 'APPROVED')">✅ Approve</button>
-                            <button class="btn-deny" onclick="respondToRide(${req.id}, 'DENIED')">❌ Deny</button>
-                        </div>
-                    `;
-                } else {
-                    actionArea = `<p>Status: <b>${req.status}</b></p>`;
+        async function loadRiders() {
+            const select = document.getElementById("riderSelect");
+            try {
+                const res = await fetch(`${API_URL}/riders`);
+                const riders = await res.json();
+                
+                select.innerHTML = '<option value="">-- Choose Your Name --</option>';
+                if (riders.length === 0) {
+                    select.innerHTML = '<option value="">No riders onboarded yet</option>';
+                    return;
                 }
 
-                container.innerHTML += `
-                    <div class="req-card">
-                        <strong>Client: ${req.client_name}</strong><br>
-                        Destination: <b>${req.destination}</b><br>
-                        <a class="call-link" href="tel:+${req.client_phone}">📞 ${req.client_phone}</a>
-                        ${actionArea}
-                    </div>
-                `;
-            });
+                riders.forEach(rider => {
+                    const opt = document.createElement("option");
+                    opt.value = rider.id;
+                    opt.textContent = `${rider.full_name} (${rider.number_plate}) - Station ID: ${rider.station_id}`;
+                    select.appendChild(opt);
+                });
+            } catch (err) {
+                select.innerHTML = '<option value="">Error loading riders</option>';
+                console.error("Error fetching riders:", err);
+            }
         }
 
-        async function respondToRide(requestId, decision) {
-            await fetch(`${API_URL}/requests/${requestId}/decision`, {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ status: decision })
-            });
-            loadRequests(); // Immediately update the screen
+        async function loadRides() {
+            const listDiv = document.getElementById("ridesList");
+            try {
+                const res = await fetch(`${API_URL}/rides`);
+                let rides = await res.json();
+
+                // Filter only pending rides
+                rides = rides.filter(r => r.status === "Pending");
+
+                if (rides.length === 0) {
+                    listDiv.innerHTML = "<p>No pending ride requests right now.</p>";
+                    return;
+                }
+
+                listDiv.innerHTML = "";
+                rides.reverse().forEach(ride => {
+                    const card = document.createElement("div");
+                    card.className = "ride-box";
+                    card.innerHTML = `
+                        <p><strong>Passenger:</strong> ${ride.passenger_name} (<a href="tel:${ride.passenger_phone}" style="color:#38bdf8;">${ride.passenger_phone}</a>)</p>
+                        <p><strong>Pickup:</strong> ${ride.pickup_location}</p>
+                        <p><strong>Destination:</strong> ${ride.destination}</p>
+                        <div class="btn-group">
+                            <button class="btn-accept" onclick="updateRideStatus(${ride.id}, 'approve')">Approve</button>
+                            <button class="btn-deny" onclick="updateRideStatus(${ride.id}, 'deny')">Deny</button>
+                        </div>
+                    `;
+                    listDiv.appendChild(card);
+                });
+            } catch (err) {
+                listDiv.innerHTML = "<p>Error connecting to dispatch server.</p>";
+            }
         }
+
+        async function updateRideStatus(rideId, action) {
+            try {
+                const res = await fetch(`${API_URL}/rides/${rideId}/${action}`, { method: "PUT" });
+                const data = await res.json();
+                alert(`Ride successfully marked as: ${data.status}`);
+                loadRides();
+            } catch (err) {
+                alert("Failed to update status.");
+            }
+        }
+
+        function filterRides() {
+            const selectedRiderId = document.getElementById("riderSelect").value;
+            const infoDiv = document.getElementById("riderInfo");
+            if (selectedRiderId) {
+                infoDiv.innerHTML = `<p style="color: #38bdf8; font-size: 13px;">✅ Logged in as Rider ID: ${selectedRiderId}</p>`;
+            } else {
+                infoDiv.innerHTML = "";
+            }
+        }
+
+        loadData();
+        // Auto-refresh rides every 10 seconds
+        setInterval(loadRides, 10000);
     </script>
 </body>
 </html>
