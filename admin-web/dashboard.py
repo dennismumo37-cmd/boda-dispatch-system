@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-API_URL = "https://boda-dispatch-backend.onrender.com"
+API_URL ="https://boda-dispatch-system.onrender.com"
 
 st.set_page_config(page_title="Boda Stage Management", layout="centered")
 st.title("🏍️ Boda Boda Management Portal")
