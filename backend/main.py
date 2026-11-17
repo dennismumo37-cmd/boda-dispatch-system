@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS stations (
 )
 """)
 
-# 2. Riders Table (Includes bike_type, rating, and review_summary)
+# 2. Riders Table
 cursor.execute("""
 CREATE TABLE IF NOT EXISTS riders (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
