@@ -3,90 +3,137 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Boda Dispatch - Rider Portal</title>
+    <title>Juja Boda - Rider Portal</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 500px; margin: 20px auto; padding: 15px; background: #0f172a; color: #f8fafc; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            max-width: 480px; 
+            margin: 0 auto; 
+            padding: 10px; 
+            background: #0f172a; 
+            color: #f8fafc; 
+            min-height: 100vh;
+        }
+        .card { 
+            background: #1e293b; 
+            padding: 20px; 
+            border-radius: 16px; 
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3); 
+            margin-bottom: 20px;
+        }
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
-        select, button { padding: 10px; border-radius: 6px; border: none; font-size: 14px; width: 100%; box-sizing: border-box; }
-        select { margin-bottom: 15px; background: #1e293b; color: white; border: 1px solid #334155; }
-        .ride-box { background: #1e293b; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #22c55e; }
-        .ride-box p { margin: 5px 0; font-size: 14px; }
-        .btn-refresh { background: #3b82f6; color: white; cursor: pointer; width: auto; }
-        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
-        .btn-accept { background: #22c55e; color: white; font-weight: bold; flex: 1; cursor: pointer; padding: 8px; border-radius: 4px; border: none;}
-        .btn-deny { background: #ef4444; color: white; font-weight: bold; flex: 1; cursor: pointer; padding: 8px; border-radius: 4px; border: none;}
+        h2 { margin: 0; color: #38bdf8; font-size: 20px; }
+        label { display: block; margin-top: 12px; font-weight: bold; font-size: 13px; color: #cbd5e1; }
+        select, button { 
+            width: 100%; 
+            padding: 12px; 
+            margin-top: 6px; 
+            border-radius: 8px; 
+            border: 1px solid #334155; 
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        select { background: #0f172a; color: white; }
+        .ride-box { 
+            background: #0f172a; 
+            padding: 15px; 
+            border-radius: 10px; 
+            margin-top: 15px; 
+            border-left: 4px solid #22c55e; 
+            border: 1px solid #334155;
+        }
+        .ride-box p { margin: 6px 0; font-size: 14px; }
+        .btn-refresh { background: #3b82f6; color: white; cursor: pointer; width: auto; font-weight: bold; border: none; padding: 8px 14px; border-radius: 6px;}
+        .btn-group { display: flex; gap: 10px; margin-top: 12px; }
+        .btn-accept { background: #22c55e; color: white; font-weight: bold; flex: 1; cursor: pointer; padding: 10px; border-radius: 6px; border: none;}
+        .btn-deny { background: #ef4444; color: white; font-weight: bold; flex: 1; cursor: pointer; padding: 10px; border-radius: 6px; border: none;}
+        #serverStatus { font-size: 12px; color: #fde047; text-align: center; margin-bottom: 10px; display: none; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h2>🛵 Rider Portal</h2>
-        <button class="btn-refresh" onclick="loadData()">🔄 Refresh</button>
+    <div class="card">
+        <div class="header">
+            <h2>🛵 Juja Rider Portal</h2>
+            <button class="btn-refresh" onclick="loadData()">🔄 Refresh</button>
+        </div>
+
+        <div id="serverStatus">Connecting to Render backend...</div>
+
+        <label for="riderSelect">Select Your Rider Profile:</label>
+        <select id="riderSelect" onchange="filterRides()">
+            <option value="">-- Loading riders from server --</option>
+        </select>
+
+        <div id="riderInfo" style="margin-top: 10px;"></div>
     </div>
 
-    <label for="riderSelect"><strong>Select Your Rider Profile:</strong></label>
-    <select id="riderSelect" onchange="filterRides()">
-        <option value="">-- Loading riders --</option>
-    </select>
-
-    <div id="riderInfo" style="margin-bottom: 20px;"></div>
-
-    <h3>Incoming Ride Requests</h3>
-    <div id="ridesList">Select your profile above to check for rides.</div>
+    <div class="card">
+        <h3 style="margin-top:0; color:#22c55e; font-size:16px;">📥 Incoming Ride Requests</h3>
+        <div id="ridesList">Select your profile above and click refresh if needed.</div>
+    </div>
 
     <script>
         const API_URL = "https://boda-dispatch-system.onrender.com";
 
         async function loadData() {
+            const statusEl = document.getElementById("serverStatus");
+            statusEl.style.display = "block";
+            statusEl.textContent = "Connecting to Render backend...";
+            
             await loadRiders();
             await loadRides();
+            
+            statusEl.style.display = "none";
         }
 
         async function loadRiders() {
             const select = document.getElementById("riderSelect");
             try {
                 const res = await fetch(`${API_URL}/riders`);
+                if (!res.ok) throw new Error("Failed to fetch riders");
                 const riders = await res.json();
                 
                 select.innerHTML = '<option value="">-- Choose Your Name --</option>';
-                if (riders.length === 0) {
-                    select.innerHTML = '<option value="">No riders onboarded yet</option>';
+                if (!riders || riders.length === 0) {
+                    select.innerHTML = '<option value="">No riders found. Add via Swagger docs (/docs)</option>';
                     return;
                 }
 
-                riders.hash = {};
                 riders.forEach(rider => {
-                    // Fallbacks handle variations like full_name vs name, number_plate vs plate
                     const name = rider.full_name || rider.name || "Rider";
                     const plate = rider.number_plate || rider.plate || "No Plate";
                     const stationId = rider.station_id || "1";
 
                     const opt = document.createElement("option");
                     opt.value = rider.id;
-                    opt.textContent = `${name} (${plate}) - Station ID: ${stationId}`;
+                    opt.textContent = `${name} (${plate}) [Station ID: ${stationId}]`;
                     select.appendChild(opt);
                 });
             } catch (err) {
-                select.innerHTML = '<option value="">Error loading riders</option>';
+                select.innerHTML = '<option value="">Error connecting to server (Server waking up)</option>';
                 console.error("Error fetching riders:", err);
             }
         }
 
         async function loadRides() {
             const listDiv = document.getElementById("ridesList");
+            listDiv.innerHTML = "<p style='color: #fde047;'>Checking for requests...</p>";
+
             try {
-                // Check both /rides and /requests depending on your backend route setup
+                // Try fetching from /rides first, fallback to /requests if needed
                 let res = await fetch(`${API_URL}/rides`).catch(() => null);
                 if (!res || !res.ok) {
                     res = await fetch(`${API_URL}/requests`);
                 }
                 
+                if (!res.ok) throw new Error("Failed to fetch rides");
                 let rides = await res.json();
 
-                // Filter for pending requests
+                // Filter only pending rides/requests
                 rides = rides.filter(r => (r.status || "Pending") === "Pending");
 
-                if (rides.length === 0) {
-                    listDiv.innerHTML = "<p>No pending ride requests right now.</p>";
+                if (!rides || rides.length === 0) {
+                    listDiv.innerHTML = "<p style='color: #94a3b8;'>No pending ride requests right now. Waiting for clients...</p>";
                     return;
                 }
 
@@ -96,23 +143,24 @@
                     const passengerPhone = ride.passenger_phone || ride.phone || "N/A";
                     const pickup = ride.pickup_location || ride.pickup || "N/A";
                     const destination = ride.destination || "N/A";
-                    const rideId = ride.id;
+                    const rideId = ride.id || ride.request_id;
 
                     const card = document.createElement("div");
                     card.className = "ride-box";
                     card.innerHTML = `
-                        <p><strong>Passenger:</strong> ${passengerName} (<a href="tel:${passengerPhone}" style="color:#38bdf8;">${passengerPhone}</a>)</p>
-                        <p><strong>Pickup:</strong> ${pickup}</p>
-                        <p><strong>Destination:</strong> ${destination}</p>
+                        <p><strong>👤 Passenger:</strong> ${passengerName}</p>
+                        <p><strong>📞 Phone:</strong> <a href="tel:${passengerPhone}" style="color:#38bdf8; font-weight:bold;">${passengerPhone}</a></p>
+                        <p><strong>📍 Pickup:</strong> ${pickup}</p>
+                        <p><strong>🏁 Destination:</strong> ${destination}</p>
                         <div class="btn-group">
-                            <button class="btn-accept" onclick="updateRideStatus(${rideId}, 'approve')">Approve</button>
-                            <button class="btn-deny" onclick="updateRideStatus(${rideId}, 'deny')">Deny</button>
+                            <button class="btn-accept" onclick="updateRideStatus(${rideId}, 'approve')">✅ Approve</button>
+                            <button class="btn-deny" onclick="updateRideStatus(${rideId}, 'deny')">❌ Deny</button>
                         </div>
                     `;
                     listDiv.appendChild(card);
                 });
             } catch (err) {
-                listDiv.innerHTML = "<p>Error connecting to dispatch server.</p>";
+                listDiv.innerHTML = "<p style='color: #ef4444;'>Error connecting to dispatch server. Tap Refresh.</p>";
                 console.error("Ride fetch error:", err);
             }
         }
@@ -120,11 +168,14 @@
         async function updateRideStatus(rideId, action) {
             try {
                 const res = await fetch(`${API_URL}/rides/${rideId}/${action}`, { method: "PUT" });
-                const data = await res.json();
-                alert(`Ride successfully marked as: ${data.status || action}`);
+                if (!res.ok) {
+                    // Try alternative endpoint if /rides/{id}/{action} fails
+                    await fetch(`${API_URL}/requests/${rideId}/${action}`, { method: "PUT" });
+                }
+                alert(`Ride successfully marked as: ${action.toUpperCase()}`);
                 loadRides();
             } catch (err) {
-                alert("Failed to update status.");
+                alert("Failed to update status. Please try again.");
             }
         }
 
@@ -132,13 +183,16 @@
             const selectedRiderId = document.getElementById("riderSelect").value;
             const infoDiv = document.getElementById("riderInfo");
             if (selectedRiderId) {
-                infoDiv.innerHTML = `<p style="color: #38bdf8; font-size: 13px;">✅ Logged in as Rider ID: ${selectedRiderId}</p>`;
+                infoDiv.innerHTML = `<p style="color: #38bdf8; font-size: 13px; margin:0;">✅ Logged in as Rider ID: ${selectedRiderId}</p>`;
             } else {
                 infoDiv.innerHTML = "";
             }
         }
 
+        // Initial data load on page open
         loadData();
+        
+        // Auto-refresh incoming rides every 10 seconds
         setInterval(loadRides, 10000);
     </script>
 </body>
