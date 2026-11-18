@@ -9,10 +9,9 @@
         .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
         select, button { padding: 10px; border-radius: 6px; border: none; font-size: 14px; width: 100%; box-sizing: border-box; }
         select { margin-bottom: 15px; background: #1e293b; color: white; border: 1px solid #334155; }
-        .card { background: #1e293b; padding: 15px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #38bdf8; }
-        .card p { margin: 5px 0; font-size: 14px; }
-        .btn-refresh { background: #3b82f6; color: white; cursor: pointer; width: auto; }
         .ride-box { background: #1e293b; padding: 15px; border-radius: 8px; margin-top: 15px; border-left: 4px solid #22c55e; }
+        .ride-box p { margin: 5px 0; font-size: 14px; }
+        .btn-refresh { background: #3b82f6; color: white; cursor: pointer; width: auto; }
         .btn-group { display: flex; gap: 10px; margin-top: 10px; }
         .btn-accept { background: #22c55e; color: white; font-weight: bold; flex: 1; cursor: pointer; padding: 8px; border-radius: 4px; border: none;}
         .btn-deny { background: #ef4444; color: white; font-weight: bold; flex: 1; cursor: pointer; padding: 8px; border-radius: 4px; border: none;}
@@ -35,7 +34,6 @@
     <div id="ridesList">Select your profile above to check for rides.</div>
 
     <script>
-        // Change to "http://127.0.0.1:8000" if testing locally, or keep Render URL for global testing
         const API_URL = "https://boda-dispatch-system.onrender.com";
 
         async function loadData() {
@@ -55,10 +53,16 @@
                     return;
                 }
 
+                riders.hash = {};
                 riders.forEach(rider => {
+                    // Fallbacks handle variations like full_name vs name, number_plate vs plate
+                    const name = rider.full_name || rider.name || "Rider";
+                    const plate = rider.number_plate || rider.plate || "No Plate";
+                    const stationId = rider.station_id || "1";
+
                     const opt = document.createElement("option");
                     opt.value = rider.id;
-                    opt.textContent = `${rider.full_name} (${rider.number_plate}) - Station ID: ${rider.station_id}`;
+                    opt.textContent = `${name} (${plate}) - Station ID: ${stationId}`;
                     select.appendChild(opt);
                 });
             } catch (err) {
@@ -70,11 +74,16 @@
         async function loadRides() {
             const listDiv = document.getElementById("ridesList");
             try {
-                const res = await fetch(`${API_URL}/rides`);
+                // Check both /rides and /requests depending on your backend route setup
+                let res = await fetch(`${API_URL}/rides`).catch(() => null);
+                if (!res || !res.ok) {
+                    res = await fetch(`${API_URL}/requests`);
+                }
+                
                 let rides = await res.json();
 
-                // Filter only pending rides
-                rides = rides.filter(r => r.status === "Pending");
+                // Filter for pending requests
+                rides = rides.filter(r => (r.status || "Pending") === "Pending");
 
                 if (rides.length === 0) {
                     listDiv.innerHTML = "<p>No pending ride requests right now.</p>";
@@ -83,21 +92,28 @@
 
                 listDiv.innerHTML = "";
                 rides.reverse().forEach(ride => {
+                    const passengerName = ride.passenger_name || ride.name || "Passenger";
+                    const passengerPhone = ride.passenger_phone || ride.phone || "N/A";
+                    const pickup = ride.pickup_location || ride.pickup || "N/A";
+                    const destination = ride.destination || "N/A";
+                    const rideId = ride.id;
+
                     const card = document.createElement("div");
                     card.className = "ride-box";
                     card.innerHTML = `
-                        <p><strong>Passenger:</strong> ${ride.passenger_name} (<a href="tel:${ride.passenger_phone}" style="color:#38bdf8;">${ride.passenger_phone}</a>)</p>
-                        <p><strong>Pickup:</strong> ${ride.pickup_location}</p>
-                        <p><strong>Destination:</strong> ${ride.destination}</p>
+                        <p><strong>Passenger:</strong> ${passengerName} (<a href="tel:${passengerPhone}" style="color:#38bdf8;">${passengerPhone}</a>)</p>
+                        <p><strong>Pickup:</strong> ${pickup}</p>
+                        <p><strong>Destination:</strong> ${destination}</p>
                         <div class="btn-group">
-                            <button class="btn-accept" onclick="updateRideStatus(${ride.id}, 'approve')">Approve</button>
-                            <button class="btn-deny" onclick="updateRideStatus(${ride.id}, 'deny')">Deny</button>
+                            <button class="btn-accept" onclick="updateRideStatus(${rideId}, 'approve')">Approve</button>
+                            <button class="btn-deny" onclick="updateRideStatus(${rideId}, 'deny')">Deny</button>
                         </div>
                     `;
                     listDiv.appendChild(card);
                 });
             } catch (err) {
                 listDiv.innerHTML = "<p>Error connecting to dispatch server.</p>";
+                console.error("Ride fetch error:", err);
             }
         }
 
@@ -105,7 +121,7 @@
             try {
                 const res = await fetch(`${API_URL}/rides/${rideId}/${action}`, { method: "PUT" });
                 const data = await res.json();
-                alert(`Ride successfully marked as: ${data.status}`);
+                alert(`Ride successfully marked as: ${data.status || action}`);
                 loadRides();
             } catch (err) {
                 alert("Failed to update status.");
@@ -123,7 +139,6 @@
         }
 
         loadData();
-        // Auto-refresh rides every 10 seconds
         setInterval(loadRides, 10000);
     </script>
 </body>
